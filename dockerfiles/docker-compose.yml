@@ -1,0 +1,36 @@
+version: '3.7'
+
+networks:
+  bot_to_db:
+    driver: bridge
+
+services:
+
+  postgresql:
+    tty: true
+    restart: always
+    container_name: loony_db
+    env_file: ../secrets/loony_db.env
+    image: postgres:11-alpine
+    networks:
+      - bot_to_db
+    volumes:
+      - ../services/postgresql/data:/var/lib/postgresql/data
+
+  bot:
+    tty: true
+    restart: always
+    build:
+      context: ../loony
+      dockerfile: Dockerfile
+    command: bash -c "pipenv run python main.py"
+    container_name: loony_bot
+    env_file: ../secrets/loony_bot.env
+    depends_on:
+      - postgresql
+    image: loony_bot_image
+    networks:
+      - bot_to_db
+
+volumes:
+  data:
