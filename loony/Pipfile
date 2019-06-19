@@ -1,0 +1,17 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+"prospector[with-everything]"="*"
+
+[packages]
+alembic="*"
+PySocks="*"
+SQLAlchemy="*"
+telethon="*"
+uvloop="*"
+
+[requires]
+python_version = "3.7"
