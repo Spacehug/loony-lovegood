@@ -18,16 +18,16 @@ from telethon import TelegramClient, events
 from loony.project import settings
 
 logging.basicConfig(level=logging.INFO)
-logging.getLogger('asyncio').setLevel(logging.ERROR)
+logging.getLogger("asyncio").setLevel(logging.ERROR)
 
 
 async def main():
     api_id = settings.API_ID
     api_hash = settings.API_HASH
-
-    async with TelegramClient("anonymous", api_id, api_hash, proxy=(socks.SOCKS5, '127.0.0.1', 9050)) as client:
+    session = settings.container
+    async with TelegramClient(session, api_id, api_hash, proxy=(socks.SOCKS5, "127.0.0.1", 9050)) as client:
         logging.info((await client.get_me()).username)
-        message = await client.send_message('me', 'Hi!')
+        message = await client.send_message("me", "Hi!")
         await asyncio.sleep(5)
         await message.delete()
         # @client.on(events.NewMessage(pattern='(?i)hi|hello'))
