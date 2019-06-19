@@ -10,3 +10,6 @@ secrets/
 
 # Database data
 services/postgresql/data/
+
+# Session data
+*.session
