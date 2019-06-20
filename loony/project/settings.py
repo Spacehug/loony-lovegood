@@ -9,6 +9,8 @@ from alchemysession import AlchemySessionContainer
 # Telegram credentials
 API_ID = os.getenv("API_ID", None)
 API_HASH = os.getenv("API_HASH", None)
+GROUP_ID = int(os.getenv("GROUP_ID", None))
+SELF_ID = int(os.getenv("SELF_ID", None))
 
 # Database connectivity information
 DIALECT = os.getenv("DIALECT", None)
@@ -16,7 +18,7 @@ DB_USER = os.getenv("DB_USER", None)
 DB_PASS = os.getenv("DB_PASS", None)
 DB_HOST = os.getenv("DB_HOST", None)
 DB_PORT = os.getenv("DB_PORT", None)
-DB_NAME = os.getenv("DB_DATA", None)
+DB_NAME = os.getenv("DB_NAME", None)
 
 try:
     container = AlchemySessionContainer(
