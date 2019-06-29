@@ -1,7 +1,7 @@
-FROM python:3.7-slim
+FROM python:3.7
 
 ENV TERM xterm
-RUN apt-get update && apt-get install -y tzdata --no-install-recommends && apt-get purge -y --auto-remove
+RUN apt-get update && apt-get install -y tzdata build-essential --no-install-recommends && apt-get purge -y --auto-remove
 
 WORKDIR /opt/project/
 ADD . .
