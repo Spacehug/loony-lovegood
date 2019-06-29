@@ -26,8 +26,19 @@ Uses Django as RESTful service to interact with database.
 ```
 API_ID=<Your api_id>
 API_HASH=<Your api_hash>
-DJANGO_PASSWORD=<Django password, create a user in Django first>
+DJANGO_EMAIL=<Django user email, create a user in Django first>
+DJANGO_PASSWORD=<Django user password, create a user in Django first>
 DJANGO_USER=<Django user, create a user in Django first>
+GRACE=<Timeout to consider message with link an offence>
+REDIS_HOST=<Your redis host>
+REDIS_PORT=<Your redis port
+REQUESTS_TIMEOUT=<Any amount of seconds that makes sence, mine is 10>
+REST_HOST=<Your nginx host>
+REST_PORT=<Your nginx port>
+SELF_ID=<Your bot ID>
+TOR_HOST=<Your tor host>
+TOR_PORT=<Your tor port>
+SESSION_NAME=<Your default redis session name, should be self-explanatory, like your bot's name>
 TZ=<Your timezone, mine is Asia/Yekaterinburg>
 ```
 #### **
