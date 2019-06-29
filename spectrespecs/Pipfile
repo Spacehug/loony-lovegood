@@ -10,7 +10,7 @@ django = "*"
 django-admin-rangefilter="*"
 djangorestframework = "*"
 django-rest-auth="*"
-psycopg2-binary="*c"
+psycopg2-binary="*"
 drf-yasg = {extras = ["validation"],version = "*"}
 
 [requires]
