@@ -1,0 +1,34 @@
+# Jail local configuration file to put in /etc/fail2ban/jail.local
+
+[INCLUDES]
+before = paths-debian.conf
+
+[DEFAULT]
+ignoreip = 127.0.0.1/8 5.172.13.138/32
+ignorecommand =
+
+# Ban and Fine Time in Seconds
+bantime  = 3600
+findtime  = 2400
+
+# Maximum attempts before banning an intruder
+maxretry = 10
+
+backend = auto
+usedns = warn
+logencoding = auto
+
+# Default Action All Filters Disabled
+enabled = false
+
+# Default Filter Name Uses Jail Name
+filter = %(__name__)s
+
+# Firewall Defaults
+protocol = tcp
+chain = INPUT
+port = 0:65535
+banaction = iptables-multiport
+
+# Banning Action
+action = %(banaction)s[name=%(__name__)s, bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s", chain="%(chain)s"]

@@ -1,9 +1,5 @@
 """
 Todo:
-* Make all the lists persistent in the DB.
-* Get replies from DB
-* Count user warnings cumulatively, 1 regular, 2 is the last Chinese warning, RO user
-for a day on the last one, and ban if there was already a RO issued earlier.
 * Watch user joins and set 5 minutes timer on when can they post links to websites,
 emails, contacts and groups.
 """
@@ -11,201 +7,213 @@ import asyncio
 import logging
 import re
 import socks
+import sys
+import ujson
 
+import aiohttp
 import uvloop
-
-from datetime import datetime, timedelta
 
 from telethon import TelegramClient, events
 from telethon.tl.types import ChannelParticipantsAdmins
 
-from loony.project import settings
+from project import settings
 
 # Configure logging just in case we may need it.
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("asyncio").setLevel(logging.ERROR)
 
 
-class Server:
-    api_id = settings.API_ID
-    api_hash = settings.API_HASH
-    group_id = settings.GROUP_ID
-    # Gets filled to accept commands only from administrators
-    admins = {}
-    # Grace period in seconds.
-    grace_period = 150
-    # Grace timeout in minutes
-    grace_timeout = 20
-    # Dict of watched users, user makes it here when they join the group, and gets out
-    # if they send links after 5 minutes grace period, otherwise user gets permanently
-    # banned as it will be considered to be a spam.
-    # Format is {sender_id: expiration_datetime}
-    now = datetime.now()
-    watched = {9130251: now}
-    print(watched)
-    # Dict of users that have not write anything to the channel after joining.
-    # {sender_id: [bool]is_first_message}
-    shy = {}
-    # List of users that has active warnings on them.
-    # Format is {sender_id: warnings_left}
-    warned = {}
-    # Anti-spam regular expression, matches websites, e-mails, group and profile links.
-    # E.g., https:/www.google.com/, @a_group, mailmespammer@spammail.com госуслуги.рф
-    regexp = re.compile(r"([-\w\d:%._+~#=]*\.[\w\d]{2,6})|(@[\w\d_]*)")
+# async def main():
+#     async with aiohttp.ClientSession() as session:
+#         html = await nigthwatch(session, "http://python.org")
+#         print(html)
 
+
+class Bot:
     def __init__(self):
-        # Set us a client.
-        self.cl = TelegramClient(
-            settings.container.new_session("default"),
-            self.api_id,
-            self.api_hash,
-            proxy=(socks.SOCKS5, "127.0.0.1", 9050),
+        self.admins = {}
+        self.client = None
+        self.groups = {}
+        self.headers = {}
+        self.session = None
+        self.token = ""
+
+    async def start(self):
+        self.session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(settings.REQUESTS_TIMEOUT)
         )
+        # Log into django (then proceed) or tell if django is down (then quit).
+        async with self.session:
+            response = await self.login()
+            key = response.get("key")
+            if key is not None:
+                self.token = key
+                logging.info(f"Logged in into Django, got token: {key}")
+                self.headers["Authorization"] = f"token {key}"
+            else:
+                logging.fatal("Django is unavailable or invalid credentials provided")
+                sys.exit(1)
 
-    async def is_admin_speaking(self, sender_id):
-        """
-        Check if the user that inflicts a command is in administrators of the group.
-        """
-        return sender_id in self.admins and sender_id != settings.SELF_ID
+            self.client = TelegramClient(
+                settings.session,
+                settings.API_ID,
+                settings.API_HASH,
+                proxy=(socks.SOCKS5, settings.TOR_HOST, settings.TOR_PORT),
+            )
 
-    async def is_right_chat(self, chat_id):
-        """
-        Check if the chat is the one that we are administrating.
-        """
-        return chat_id == self.group_id
+            await bot.run_bot()
 
-    async def is_spam_message(self, text):
-        """
-        Check if said text has any matches for regular expressions.
+    async def login(self):
+        async with self.session.post(
+            f"http://{settings.REST_HOST}:{settings.REST_PORT}/auth/login/",
+            json={
+                "username": settings.DJANGO_USER,
+                "email": settings.DJANGO_EMAIL,
+                "password": settings.DJANGO_PASSWORD,
+            },
+        ) as response:
+            return await response.json()
 
-        If at least one, the result is true.
-        """
-        return re.search(self.regexp, text) is not None
+    # async def logout(self):
+    #     """
+    #     Currently not used.
+    #     """
+    #     async with self.session.post(
+    #         f"http://{settings.REST_HOST}:{settings.REST_PORT}/auth/logout/", json={}
+    #     ) as response:
+    #         return await response.json()
 
-    async def is_first_message(self, sender_id):
-        """
-        Check if user's message is the firs one after joining the channel.
-        """
-        return sender_id in self.shy
+    async def nightwatch(self, message, uid, gid):
+        async with self.session.post(
+            f"http://{settings.REST_HOST}:{settings.REST_PORT}/nightwatch/",
+            data={"message": message, "uid": uid, "gid": gid},
+            headers=self.headers,
+        ) as response:
+            return await response.json()
 
-    async def is_watched(self, sender_id):
-        """
-        Check if user with sender_id is in watchlist and the timer is not ran out yet.
+    async def warn_profile(self, uid, gid, amount):
+        async with self.session.put(
+            f"http://{settings.REST_HOST}:{settings.REST_PORT}"
+            f"/profile/{uid}/{gid}/warning/",
+            data={"warning": int(amount)},
+            headers=self.headers,
+        ) as response:
+            return await response.json()
 
-        If the user is in watchlist and the timer went out already, poop the user out of
-        the watchlist and return False. Otherwise, return True.
-        """
-        print(sender_id)
-        print(self.watched.get(sender_id, None))
-        print(self.watched.get(sender_id, datetime.now() - timedelta(minutes=self.grace_timeout)))
-        that = self.watched.get(sender_id, datetime.now() - timedelta(minutes=self.grace_timeout)) + timedelta(seconds=self.grace_period)
-        print(that)
-        print(that < datetime.now())
-        cant_post_links_now = (self.watched.get(sender_id, datetime.now() - timedelta(minutes=self.grace_timeout)) + timedelta(seconds=self.grace_period)) < datetime.now()
-        # if not cant_post_links_now:
-        #     self.watched.pop(sender_id, None)
-        return sender_id in self.watched and cant_post_links_now
+    async def get_profile(self, uid, gid):
+        async with self.session.get(
+            f"http://{settings.REST_HOST}:{settings.REST_PORT}/profile/{uid}/{gid}",
+            headers=self.headers
+        ) as response:
+            return await response.json()
 
-    async def run(self):
-        async with self.cl:
+    async def run_bot(self):
+        async with self.client:
             # Show username we are logged in as.
             # The account needs to have a username set up.
-            logging.info((await self.cl.get_me()).username)
+            me = await self.client.get_me()
+            logging.info(f"Username: {me.username}, ID: {me.id}")
 
-            # Get all the groups we are a part of.
-            groups = {
-                g.id: g.entity
-                for g in await self.cl.get_dialogs()
-                if g.id == settings.GROUP_ID
-            }
-            # "Select" the group we want to administrate and do maintenance in.
-            group = groups[settings.GROUP_ID]
+            # Fill in admins
+            async for group in self.client.iter_dialogs():
+                if group.pinned:
+                    async for admin in self.client.iter_participants(
+                        group, filter=ChannelParticipantsAdmins
+                    ):
+                        if self.admins.get(admin.id) is None:
+                            self.admins[admin.id] = [group.id]
+                        else:
+                            self.admins[admin.id].append(group.id)
 
-            # Get admin list for the group. Can fail on large groups, use with care.
-            async for admin in self.cl.iter_participants(
-                group, filter=ChannelParticipantsAdmins
-            ):
-                self.admins[
-                    admin.id
-                ] = f"{str(admin.first_name)} {str(admin.last_name)}"
+            logging.info("Got administrators for pinned groups")
 
-            @self.cl.on(events.NewMessage)
+            @self.client.on(events.NewMessage)
             async def message_handler(event):
-                """
-                Reply to o/ if mentioned or replied to.
-                """
-                logging.info(
-                    f"event.mentioned: {event.mentioned}\n"
-                    f"right chat: {await self.is_right_chat(event.chat_id)}\n"
-                    f"admin speaking: {await self.is_admin_speaking(event.from_id)}\n"
-                    f"is spam msg: {await self.is_spam_message(event.raw_text)}\n"
-                    f"is being watched: {await self.is_watched(event.from_id)}\n"
-                    f"is first message: {await self.is_first_message(event.from_id)}\n"
-                    f"shy list: {self.shy}\n"
-                    f"watch list: {self.watched}\n"
-                    f"sender: {event.from_id}"
-                )
+                message = event.raw_text
+                uid = event.sender_id
+                gid = event.chat_id
+                chat_entity = await event.get_chat()
+                logging.info(event)
+                sender_is_admin = gid in self.admins.get(event.sender_id, [])
+                sender_is_me = event.sender_id == me
+
+                # Reply with \o to o/
                 if (
-                    await self.is_right_chat(event.chat_id)
-                    # Excludes self, i.e. we don't want to react to our own commands.
-                    and await self.is_admin_speaking(event.from_id)
-                    # Notice that event.mentioned is True if the account was directly
-                    # mentioned or replied to.
-                    and event.mentioned is True
+                    sender_is_admin
+                    and event.mentioned
                     and "o/" in event.raw_text
+                    and not sender_is_me
                 ):
                     await event.reply("\\o")
+
+                # Warn user whom admin is replying to with a message that
+                # contains "✨ warn" in it with 1 if no digits in the message or only
+                # positive digits in the message, -1 if negative digit in the message
+                # (i.e. remove one level of warning)
                 elif (
-                    await self.is_right_chat(event.chat_id)
-                    and await self.is_admin_speaking(event.from_id)
-                    # We don't want admins to give us warning by our own hands.
-                    and not event.mentioned
-                    # No non-reply warnings.
+                    sender_is_admin
+                    and "✨ warn" in event.raw_text
                     and event.is_reply
-                    and "✨ warning" in event.raw_text
+                    and event.reply_to_msg_id != me.id
                 ):
-                    await self.cl.send_message(
-                        entity=group,
-                        message=f"✨ You have been warned!",
+                    amount = await self.get_warn_amount(event.raw_text)
+                    reply_to = await event.get_reply_message()
+                    uid = reply_to.from_id
+                    profile = await self.get_profile(uid, gid)
+                    threat = profile.get("warnings")
+
+                    await self.warn_profile(uid, gid, amount)
+                    await self.client.send_message(
+                        entity=gid,
+                        message=f"✨ Your threat level changed, it's {threat} now",
                         # This one is important:
                         # We want to warn a person that the message an administrator
                         # have replied to is the cause for the warning.
                         reply_to=await event.get_reply_message(),
                     )
-                elif (
-                    await self.is_right_chat(event.chat_id)
-                    and await self.is_spam_message(event.raw_text)
-                    and (
-                        await self.is_first_message(event.from_id)
-                        or await self.is_watched(event.from_id)
+
+                # Go check nightwatch for user with given text
+                elif not sender_is_admin and not sender_is_me:
+                    response = await self.nightwatch(message, uid, gid)
+                    first_message = response.get("first_message", False)
+                    is_malicious = response.get("is_malicious", False)
+                    message_has_friend_codes = response.get("is_friend_code", False)
+                    user_has_n_warnings = response.get("warnings", 0)
+                    grace_expired = (
+                        float(response.get("grace_diff", 0)) < settings.GRACE
                     )
-                ):
-                    await event.reply("✨ Expellispamus!")
 
-            @self.cl.on(events.ChatAction)
+                    # User starts with spam in the group
+                    # Spam determined like this:
+                    # Any message that contains link and was written within 5 minutes *
+                    # * of joining the group  -> Spam
+                    # * of the first message (inclusive) -> Spam
+                    if (
+                        first_message
+                        and is_malicious
+                        or not grace_expired
+                        and is_malicious
+                    ):
+                        await self.client.send_message(
+                            entity=gid,
+                            message="✨ Explellispamus! (You should get banned!)",
+                        )
+
+            @self.client.on(events.ChatAction)
             async def action_handler(event):
-                """
-                Parse user joins and set a timer for them.
-                """
-                if (
-                    await self.is_right_chat(event.chat_id)
-                    and (event.user_joined or event.user_added)
-                    and event.user_id not in self.admins
-                ):
-                    self.watched[event.user_id] = datetime.now()
-                    self.shy[event.user_id] = True
-                    logging.info(self.watched)
-                elif await self.is_right_chat(event.chat_id) and (
-                    event.user_kicked or event.user_left
-                ):
-                    self.watched.pop(event.user_id, None)
-                    self.shy.pop(event.user_id, None)
-                    logging.info(self.watched)
+                pass
 
-            await self.cl.run_until_disconnected()
+            await self.client.run_until_disconnected()
+
+    async def get_warn_amount(self, text):
+        digit = re.search(re.compile(r"[-+]?\d+"), text)
+        if digit is None:
+            return 1
+        else:
+            return 1 if int(digit.group()) >= 0 else -1
 
 
 uvloop.install()
-server = Server()
 loop = asyncio.get_event_loop()
-loop.run_until_complete(server.run())
+bot = Bot()
+loop.run_until_complete(bot.start())

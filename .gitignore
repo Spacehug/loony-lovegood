@@ -9,7 +9,8 @@ __pycache__/
 secrets/
 
 # Database data
-services/postgresql/data/
+services/postgresql/dbdata/
+services/redis/redisdata
 
 # Session data
 *.session

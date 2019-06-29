@@ -1,36 +1,101 @@
 version: '3.7'
 
 networks:
-  bot_to_db:
+  loony_bot_to_redis:
+    driver: bridge
+  loony_django_to_db:
+    driver: bridge
+  loony_nginx_to_django:
     driver: bridge
 
 services:
-
   postgresql:
-    tty: true
-    restart: always
     container_name: loony_db
-    env_file: ../secrets/loony_db.env
+    env_file: ../secrets/postgresql.env
     image: postgres:11-alpine
     networks:
-      - bot_to_db
+      - loony_django_to_db
+    ports:
+      - 5432:5432
+    restart: always
+    tty: true
     volumes:
-      - ../services/postgresql/data:/var/lib/postgresql/data
+      - ../services/postgresql/dbdata:/var/lib/postgresql/data
+
+  django:
+    build:
+      context: ../loony
+      dockerfile: Dockerfile
+    command: bash -c "pipenv run daphne project.asgi:application"
+    container_name: loony_django
+    depends_on:
+      - postgresql
+      - redis
+    env_file: ../secrets/django.env
+    image: loony_django
+    networks:
+      - loony_django_to_db
+      - loony_nginx_to_django
+    restart: always
+    tty: true
 
   bot:
-    tty: true
-    restart: always
     build:
       context: ../loony
       dockerfile: Dockerfile
     command: bash -c "pipenv run python main.py"
     container_name: loony_bot
-    env_file: ../secrets/loony_bot.env
     depends_on:
-      - postgresql
-    image: loony_bot_image
+      - django
+      - redis
+      - tor
+    env_file: ../secrets/bot.env
+    image: loony_bot
     networks:
-      - bot_to_db
+      - loony_bot_to_redis
+    restart: always
+    tty: true
+
+  nginx:
+    build:
+      context: ../services/nginx/
+      dockerfile: Dockerfile
+    container_name: loony_nginx
+    depends_on:
+      - django
+    env_file: ../secrets/nginx.env
+    image: loony_nginx
+    networks:
+      - loony_nginx_to_django
+    ports:
+      - 80:80
+      - 443:443
+    restart: always
+    tty: true
+
+  redis:
+    command: ["redis-server", "--appendonly", "yes"]
+    container_name: loony_redis
+    image: redis:5-alpine
+    networks:
+      - loony_bot_to_redis
+    ports:
+      - 6379:6379
+    restart: always
+    tty: true
+    volumes:
+      - ../services/redis/redisdata:/data
+
+  tor:
+    container_name: loony_tor
+    image: dockage/tor-privoxy:latest
+    ports:
+      - "9050:9050"
+      - "9051:9051"
+      - "8118:8118"
+    restart: always
+    tty: true
 
 volumes:
-  data:
+  dbdata:
+  redisdata:
