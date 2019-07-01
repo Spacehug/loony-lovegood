@@ -45,12 +45,12 @@ class Bot:
         # Log into django (then proceed) or tell if django is down (then quit).
         async with self.session:
             response = await self.login()
-            key = response.get("key")
-            if key is not None:
+            try:
+                key = response["key"]
                 self.token = key
                 logging.info(f"Logged in into Django, got token: {key}")
                 self.headers["Authorization"] = f"token {key}"
-            else:
+            except ValueError:
                 logging.fatal("Django is unavailable or invalid credentials provided")
                 sys.exit(1)
 
