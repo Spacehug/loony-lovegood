@@ -26,7 +26,7 @@ services:
     build:
       context: ../spectrespecs
       dockerfile: Dockerfile
-    command: bash -c "pipenv run python manage.py runserver 0.0.0.0:8000"
+    command: bash -c "pipenv run python manage.py runserver 0.0.0.0:8001"
     container_name: loony_django
     depends_on:
       - postgresql
@@ -36,6 +36,8 @@ services:
     networks:
       - loony_django_to_db
       - loony_nginx_to_django
+    ports:
+      - 8001:8001
     restart: always
     tty: true
 
