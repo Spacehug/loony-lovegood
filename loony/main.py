@@ -154,6 +154,7 @@ class Bot:
 
             @self.client.on(events.NewMessage)
             async def message_handler(event):
+                await self.client.send_read_acknowledge(event.id)
                 message = event.raw_text
                 uid = event.sender_id
                 gid = event.chat_id
@@ -186,13 +187,14 @@ class Bot:
                     threat = result.get("warnings")
                     own_message = await self.client.send_message(
                         entity=gid,
-                        message=f"✨ Moneo! Your threat level is {threat} now. Please, behave.",
+                        message=f"✨ Moneo! Your threat level is {threat} now. "
+                        f"Please, behave.",
                         # This one is important:
                         # We want to warn a person that the message an administrator
                         # have replied to is the cause for the warning.
                         reply_to=reply_to,
                     )
-                    # Delete admin message
+                    # Delete the message
                     await event.delete()
                     # Wait for settings.CLEAR_MESSAGES_IN
                     await asyncio.sleep(settings.CLEAR_MESSAGES_IN)
@@ -222,7 +224,7 @@ class Bot:
                         # have replied to is the cause for the warning.
                         reply_to=reply_to,
                     )
-                    # Delete admin message
+                    # Delete the message
                     await event.delete()
                     # Wait for settings.CLEAR_MESSAGES_IN
                     await asyncio.sleep(settings.CLEAR_MESSAGES_IN)
@@ -318,14 +320,13 @@ class Bot:
                         and uid != me.id
                     ):
                         await event.forward_to(
-                            entity=self.friend_codes_channel,
-                            silent=True,
+                            entity=self.friend_codes_channel, silent=True
                         )
                         own_message = await event.reply(
                             message="✨ Ordina amicus! "
                             "Your code has been relocated to @HogwartsMainHall."
                         )
-                        # Delete the message with a friend code
+                        # Delete the message
                         await event.delete()
                         # Remove messages in settings.CLEAR_MESSAGES_IN seconds
                         await asyncio.sleep(settings.CLEAR_MESSAGES_IN)
