@@ -1,11 +1,7 @@
-"""
-Todo:
-* Watch user joins and set 5 minutes timer on when can they post links to websites,
-emails, contacts and groups.
-"""
 import asyncio
 import logging
-import re
+
+# import re
 import socks
 import sys
 import ujson
@@ -14,7 +10,9 @@ import aiohttp
 import uvloop
 
 from telethon import TelegramClient, events
-from telethon.tl.types import ChannelParticipantsAdmins
+from telethon.tl.functions.channels import EditBannedRequest
+from telethon.tl.types import ChannelParticipantsAdmins, ChatBannedRights
+
 
 from project import settings
 
@@ -23,20 +21,20 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("asyncio").setLevel(logging.ERROR)
 
 
-# async def main():
-#     async with aiohttp.ClientSession() as session:
-#         html = await nigthwatch(session, "http://python.org")
-#         print(html)
-
-
 class Bot:
     def __init__(self):
-        self.admins = {}
-        self.client = None
-        self.groups = {}
-        self.headers = {}
+        self.admins: dict = {}
+        self.client: TelegramClient = TelegramClient(
+            settings.session,
+            settings.API_ID,
+            settings.API_HASH,
+            proxy=(socks.SOCKS5, settings.TOR_HOST, settings.TOR_PORT),
+        )
+        self.groups: dict = {}
+        self.headers: dict = {}
         self.session = None
-        self.token = ""
+        self.token: str = ""
+        self.friend_codes_channel = settings.FRIEND_CODES_CHANNEL
 
     async def start(self):
         self.session = aiohttp.ClientSession(
@@ -54,13 +52,6 @@ class Bot:
                 logging.fatal("Django is unavailable or invalid credentials provided")
                 sys.exit(1)
 
-            self.client = TelegramClient(
-                settings.session,
-                settings.API_ID,
-                settings.API_HASH,
-                proxy=(socks.SOCKS5, settings.TOR_HOST, settings.TOR_PORT),
-            )
-
             await bot.run_bot()
 
     async def login(self):
@@ -76,14 +67,14 @@ class Bot:
 
     # async def logout(self):
     #     """
-    #     Currently not used.
+    #     Currently unused.
     #     """
     #     async with self.session.post(
     #         f"http://{settings.REST_HOST}:{settings.REST_PORT}/auth/logout/", json={}
     #     ) as response:
     #         return await response.json()
 
-    async def nightwatch(self, message, uid, gid):
+    async def nightwatch(self, uid, gid, message):
         async with self.session.post(
             f"http://{settings.REST_HOST}:{settings.REST_PORT}/nightwatch/",
             data={"message": message, "uid": uid, "gid": gid},
@@ -91,21 +82,54 @@ class Bot:
         ) as response:
             return await response.json()
 
-    async def warn_profile(self, uid, gid, amount):
+    async def warn_profile(self, uid, gid):
         async with self.session.put(
             f"http://{settings.REST_HOST}:{settings.REST_PORT}"
             f"/profile/{uid}/{gid}/warning/",
-            data={"warning": int(amount)},
+            data={},
             headers=self.headers,
         ) as response:
             return await response.json()
 
-    async def get_profile(self, uid, gid):
-        async with self.session.get(
-            f"http://{settings.REST_HOST}:{settings.REST_PORT}/profile/{uid}/{gid}",
-            headers=self.headers
+    async def pardon_profile(self, uid, gid):
+        async with self.session.put(
+            f"http://{settings.REST_HOST}:{settings.REST_PORT}"
+            f"/profile/{uid}/{gid}/pardon/",
+            data={},
+            headers=self.headers,
         ) as response:
             return await response.json()
+
+    async def create_profile(self, uid, gid):
+        async with self.session.post(
+            f"http://{settings.REST_HOST}:{settings.REST_PORT}/profile/",
+            data={"uid": uid, "gid": gid},
+            headers=self.headers,
+        ) as response:
+            return await response.json()
+
+    async def get_or_create_profile(self, uid, gid):
+        async with self.session.get(
+            f"http://{settings.REST_HOST}:{settings.REST_PORT}/profile/{uid}/{gid}/",
+            headers=self.headers,
+        ) as response:
+            return await response.json()
+
+    async def destroy_profile(self, uid, gid):
+        async with self.session.delete(
+            f"http://{settings.REST_HOST}:{settings.REST_PORT}/profile/{uid}/{gid}/",
+            headers=self.headers,
+        ) as response:
+            return await response.json()
+
+    # async def get_amount(self, text):
+    #     """
+    #     Currently unused.
+    #     """
+    #     match = re.search(re.compile(r"[-+]?\d+\b"), text)
+    #     if match is None:
+    #         return 1
+    #     return int(match.group())
 
     async def run_bot(self):
         async with self.client:
@@ -117,6 +141,7 @@ class Bot:
             # Fill in admins
             async for group in self.client.iter_dialogs():
                 if group.pinned:
+                    logging.info(f"Pinned: {group.title} - {group.id}")
                     async for admin in self.client.iter_participants(
                         group, filter=ChannelParticipantsAdmins
                     ):
@@ -132,8 +157,6 @@ class Bot:
                 message = event.raw_text
                 uid = event.sender_id
                 gid = event.chat_id
-                chat_entity = await event.get_chat()
-                logging.info(event)
                 sender_is_admin = gid in self.admins.get(event.sender_id, [])
                 sender_is_me = event.sender_id == me
 
@@ -141,7 +164,7 @@ class Bot:
                 if (
                     sender_is_admin
                     and event.mentioned
-                    and "o/" in event.raw_text
+                    and "o/" in message
                     and not sender_is_me
                 ):
                     await event.reply("\\o")
@@ -152,40 +175,112 @@ class Bot:
                 # (i.e. remove one level of warning)
                 elif (
                     sender_is_admin
-                    and "✨ warn" in event.raw_text
+                    and "!warn" in message
                     and event.is_reply
                     and event.reply_to_msg_id != me.id
                 ):
-                    amount = await self.get_warn_amount(event.raw_text)
                     reply_to = await event.get_reply_message()
                     uid = reply_to.from_id
-                    profile = await self.get_profile(uid, gid)
-                    threat = profile.get("warnings")
-
-                    await self.warn_profile(uid, gid, amount)
-                    await self.client.send_message(
+                    await self.get_or_create_profile(uid, gid)
+                    result = await self.warn_profile(uid, gid)
+                    threat = result.get("warnings")
+                    own_message = await self.client.send_message(
                         entity=gid,
-                        message=f"✨ Your threat level changed, it's {threat} now",
+                        message=f"✨ Moneo! Your threat level is {threat} now. Please, behave.",
                         # This one is important:
                         # We want to warn a person that the message an administrator
                         # have replied to is the cause for the warning.
-                        reply_to=await event.get_reply_message(),
+                        reply_to=reply_to,
                     )
+                    # Delete admin message
+                    await event.delete()
+                    # Wait for settings.CLEAR_MESSAGES_IN
+                    await asyncio.sleep(settings.CLEAR_MESSAGES_IN)
+                    # And delete own message too
+                    await own_message.delete()
+
+                # Pardon user whom admin is replying to with a message that
+                # contains "✨ pardon" in it with 1 if no digits in the message or only
+                # positive digits in the message, -1 if negative digit in the message
+                # (i.e. remove one level of warning)
+                elif (
+                    sender_is_admin
+                    and "!pardon" in message
+                    and event.is_reply
+                    and event.reply_to_msg_id != me.id
+                ):
+                    reply_to = await event.get_reply_message()
+                    uid = reply_to.from_id
+                    await self.get_or_create_profile(uid, gid)
+                    result = await self.pardon_profile(uid, gid)
+                    threat = result.get("warnings")
+                    own_message = await self.client.send_message(
+                        entity=gid,
+                        message=f"✨ Ignosco! Your threat level is {threat} now.",
+                        # This one is important:
+                        # We want to warn a person that the message an administrator
+                        # have replied to is the cause for the warning.
+                        reply_to=reply_to,
+                    )
+                    # Delete admin message
+                    await event.delete()
+                    # Wait for settings.CLEAR_MESSAGES_IN
+                    await asyncio.sleep(settings.CLEAR_MESSAGES_IN)
+                    # And delete own message too
+                    await own_message.delete()
+
+                # Ban user whom admin is replying to with a message that
+                # contains "✨ ban" in it.
+                elif (
+                    sender_is_admin
+                    and "!ban" in message
+                    and event.is_reply
+                    and event.reply_to_msg_id != me.id
+                ):
+                    reply_to = await event.get_reply_message()
+                    uid = reply_to.from_id
+
+                    own_message = await self.client.send_message(
+                        entity=gid, message=f"✨ Exilium!", reply_to=reply_to
+                    )
+                    # Restrict user
+                    await self.client(
+                        EditBannedRequest(
+                            gid,
+                            uid,
+                            ChatBannedRights(until_date=None, view_messages=True),
+                        )
+                    )
+                    # Delete the message admin replied to
+                    await reply_to.delete()
+                    # And admin message too
+                    await event.delete()
+                    # Wait for settings.CLEAR_MESSAGES_IN
+                    await asyncio.sleep(settings.CLEAR_MESSAGES_IN)
+                    # And delete own message too
+                    await own_message.delete()
 
                 # Go check nightwatch for user with given text
-                elif not sender_is_admin and not sender_is_me:
-                    response = await self.nightwatch(message, uid, gid)
+                elif (
+                    not sender_is_admin
+                    and not sender_is_me
+                    and gid != self.friend_codes_channel
+                    and uid is not None
+                ):
+                    response = await self.nightwatch(uid, gid, message)
                     first_message = response.get("first_message", False)
                     is_malicious = response.get("is_malicious", False)
                     message_has_friend_codes = response.get("is_friend_code", False)
-                    user_has_n_warnings = response.get("warnings", 0)
+                    # FixMe: Currently unused
+                    # user_has_n_warnings = response.get("warnings", 0)
                     grace_expired = (
-                        float(response.get("grace_diff", 0)) < settings.GRACE
+                        float(response.get("grace_diff", 0)) > settings.GRACE
                     )
 
                     # User starts with spam in the group
                     # Spam determined like this:
-                    # Any message that contains link and was written within 5 minutes *
+                    # Any message that contains link and was written within
+                    # settings.GRACE minutes *
                     # * of joining the group  -> Spam
                     # * of the first message (inclusive) -> Spam
                     if (
@@ -194,23 +289,68 @@ class Bot:
                         or not grace_expired
                         and is_malicious
                     ):
-                        await self.client.send_message(
-                            entity=gid,
-                            message="✨ Explellispamus! (You should get banned!)",
+                        own_message = await self.client.send_message(
+                            entity=gid, message="✨ Exilispamus!"
                         )
+                        # Restrict offender and delete all the messages from them
+                        # Restrict user
+                        await self.client(
+                            EditBannedRequest(
+                                gid,
+                                uid,
+                                ChatBannedRights(until_date=None, view_messages=True),
+                            )
+                        )
+                        # Delete all the messages from this user.
+                        for message in await self.client.get_messages(
+                            gid, limit=10, from_user=uid
+                        ):
+                            await message.delete()
+                        # Wait for settings.CLEAR_MESSAGES_IN
+                        await asyncio.sleep(settings.CLEAR_MESSAGES_IN)
+                        # And delete own message too
+                        await own_message.delete()
+
+                    # Relocate friend codes to friend codes channel
+                    elif (
+                        message_has_friend_codes
+                        and gid != self.friend_codes_channel
+                        and uid != me.id
+                    ):
+                        await event.forward_to(
+                            entity=self.friend_codes_channel,
+                            silent=True,
+                        )
+                        own_message = await event.reply(
+                            message="✨ Ordina amicus! "
+                            "Your code has been relocated to @HogwartsMainHall."
+                        )
+                        # Delete the message with a friend code
+                        await event.delete()
+                        # Remove messages in settings.CLEAR_MESSAGES_IN seconds
+                        await asyncio.sleep(settings.CLEAR_MESSAGES_IN)
+                        # And delete own message too
+                        await own_message.delete()
 
             @self.client.on(events.ChatAction)
             async def action_handler(event):
-                pass
+                # uid = event.user_id
+                # gid = event.chat_id
+                if event.user_joined:
+                    logging.info("User joined")
+                    # await self.create_profile(uid, gid)
+                elif event.user_added:
+                    logging.info("User was added")
+                    # await self.create_profile(uid, gid)
+                elif event.user_kicked:
+                    logging.info("User was kicked")
+                    await event.delete()
+                    # await self.destroy_profile(uid, gid)
+                elif event.user_left:
+                    logging.info("User left")
+                    # await self.destroy_profile(uid, gid)
 
             await self.client.run_until_disconnected()
-
-    async def get_warn_amount(self, text):
-        digit = re.search(re.compile(r"[-+]?\d+"), text)
-        if digit is None:
-            return 1
-        else:
-            return 1 if int(digit.group()) >= 0 else -1
 
 
 uvloop.install()
