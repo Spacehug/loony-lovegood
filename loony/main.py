@@ -154,10 +154,10 @@ class Bot:
 
             @self.client.on(events.NewMessage)
             async def message_handler(event):
-                await self.client.send_read_acknowledge(event.id)
                 message = event.raw_text
                 uid = event.sender_id
                 gid = event.chat_id
+                await self.client.send_read_acknowledge(entity=gid, message=event)
                 sender_is_admin = gid in self.admins.get(event.sender_id, [])
                 sender_is_me = event.sender_id == me
 
