@@ -37,7 +37,7 @@ class Profile(models.Model):
         help_text="Date and time the profile grace period started at.",
         verbose_name="Grace started at",
     )
-    warnings = models.PositiveSmallIntegerField(
+    warnings = models.IntegerField(
         blank=False,
         null=False,
         help_text="Warnings this user have.",
@@ -59,8 +59,4 @@ class Profile(models.Model):
 
     def reset_grace(self):
         self.grace_at = timezone.now()
-        self.save()
-
-    def modify_warning_count(self, modifier):
-        self.warnings += modifier
         self.save()

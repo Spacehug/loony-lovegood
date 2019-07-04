@@ -1,15 +1,17 @@
-from rest_framework.generics import ListCreateAPIView, GenericAPIView
+from django.db.models import F
+from rest_framework.generics import CreateAPIView, GenericAPIView, ListCreateAPIView
 from rest_framework.mixins import (
-    UpdateModelMixin,
-    RetrieveModelMixin,
     DestroyModelMixin,
+    RetrieveModelMixin,
+    UpdateModelMixin,
 )
+from rest_framework.response import Response
 
 from core.mixins import MultipleFieldLookupMixin
 from core.models import Profile
 from core.serializers import (
-    ProfileSerializer,
     ProfileGraceSerializer,
+    ProfileSerializer,
     ProfileWarningSerializer,
 )
 
@@ -40,7 +42,6 @@ class UpdateAPIView(UpdateModelMixin, GenericAPIView):
         return self.update(request, *args, **kwargs)
 
 
-# Todo: delete this
 class ProfileListCreateView(ListCreateAPIView):
     serializer_class = ProfileSerializer
     queryset = Profile.objects.all()
@@ -64,12 +65,27 @@ class ProfileResetGraceView(MultipleFieldLookupMixin, UpdateAPIView):
         serializer.save()
 
 
-class ProfileModifyWarningView(MultipleFieldLookupMixin, UpdateAPIView):
+class ProfileWarningIncreaseView(MultipleFieldLookupMixin, UpdateAPIView):
     serializer_class = ProfileWarningSerializer
     queryset = Profile.objects.all()
     lookup_fields = ("uid", "gid")
 
-    def perform_update(self, serializer):
-        modifier = self.request.data.get("warning", 0)
-        serializer.instance.modify_warning_count(modifier)
-        serializer.save()
+    def put(self, request, *args, **kwargs):
+        instance = self.get_object()
+        Profile.objects.filter(gid=instance.gid, uid=instance.uid).update(
+            warnings=F("warnings") + 1
+        )
+        return self.update(request, *args, **kwargs)
+
+
+class ProfileWarningDecreaseView(MultipleFieldLookupMixin, UpdateAPIView):
+    serializer_class = ProfileWarningSerializer
+    queryset = Profile.objects.all()
+    lookup_fields = ("uid", "gid")
+
+    def put(self, request, *args, **kwargs):
+        instance = self.get_object()
+        Profile.objects.filter(gid=instance.gid, uid=instance.uid).update(
+            warnings=F("warnings") - 1
+        )
+        return self.update(request, *args, **kwargs)
