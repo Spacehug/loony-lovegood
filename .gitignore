@@ -6,7 +6,10 @@ __pycache__/
 *$py.class
 
 # Environments
-secrets/
+secrets/bot.env
+secrets/django.env
+secrets/nginx.env
+secrets/postgresql.env
 
 # Database data
 services/postgresql/dbdata/
