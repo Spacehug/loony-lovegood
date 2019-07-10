@@ -2,72 +2,42 @@
 The bot is used for HPWU International telegram group maintenance and user management.
 Uses Django as RESTful service to interact with database.
 
-## Project structure
+## Project structure and notes
 ```text
-├─ .gitignore
-├─ LICENSE
-├─ Makefile
-├─ README.md ~> This file
-├─ dockerfiles/
-│ └─ docker-compose.yml
-├─ loony/ <~ Luna Lovegood bot itself
-├─ secrets/ <~ This is part of .gitignore, create these files locally.
-│ ├─ bot.env <~ *
-│ ├─ django.env <~ **
-│ ├─ nginx.env <~ ***
-│ └─ postgresql.env <~ ****
-├─ services/
-│ ├─ postgresql/ <~ This should exist
-│ └─ redis/ <~ This should exist
-└─ spectrespecs/ <~ Django with DRF and docs.
-```
-
-#### *
-```
-API_ID=<Your api_id>
-API_HASH=<Your api_hash>
-DJANGO_EMAIL=<Django user email, create a user in Django first>
-DJANGO_PASSWORD=<Django user password, create a user in Django first>
-DJANGO_USER=<Django user, create a user in Django first>
-FRIEND_CODES_CHANNEL=<Your channel code to post friend dodes>
-GRACE=<Timeout to consider message with link an offence>
-REDIS_HOST=<Your redis host>
-REDIS_PORT=<Your redis port>
-REQUESTS_TIMEOUT=<Any amount of seconds that makes sence, mine is 10>
-REST_HOST=<Your nginx host>
-REST_PORT=<Your nginx port>
-SELF_ID=<Your bot ID>
-TOR_HOST=<Your tor host>
-TOR_PORT=<Your tor port>
-SESSION_NAME=<Your default redis session name, should be self-explanatory, like your bot's name>
-TZ=<Your timezone, mine is Asia/Yekaterinburg>
-```
-#### **
-```
-C_FORCE_ROOT=true
-DB_HOST=<your db hostname>
-DB_NAME=<your db name>
-DB_PASS=<your db user password>
-DB_PORT=<your db port>
-DB_USER=<your db user>
-DEBUG=False
-SECRET_KEY=<you django app secret key>
-TZ=<Your timezone, mine is Asia/Yekaterinburg>
-```
-#### ***
-```
-TZ=<Your timezone, mine is Asia/Yekaterinburg>
-```
-#### ****
-```
-C_FORCE_ROOT=true
-PGDATA=/var/lib/postgresql/data
-POSTGRES_DB=<your db name>
-POSTGRES_HOST=<your db hostname>
-POSTGRES_PASSWORD=<your db password>
-POSTGRES_PORT=<your db port>
-POSTGRES_USER=<your db user>
-TZ=<Your timezone, mine is Asia/Yekaterinburg>
+loony-lovegood
+├── dockerfiles
+│   └── docker-compose.yml
+├── loony [<~ Luna Lovegood bot engine]
+│   ├── project
+│   │   └── settings.py
+│   ├── Dockerfile
+│   └── main.py
+├── secrets
+│   ├── bot.env [<~ Edit before use]
+│   ├── django.env [<~ Edit before use]
+│   ├── nginx.env [<~ Edit before use]
+│   └── postgresql.env [<~ Edit before use]
+├── services
+│   ├── fail2ban
+│   ├── nginx
+│   │   ├── Dockerfile
+│   │   └── nginx.conf
+│   ├── ntp
+│   ├── postgresql
+│   │   └── dbdata [<~ Should be created beforehand]
+│   └── redis
+│       └── redisdata [<~ Should be created beforehand]
+├── spectrespecs [<~ Django REST API on DRF]
+│   ├── authentication
+│   ├── core
+│   ├── nightwatch
+│   ├── project
+│   │   ├── settings.py
+│   ├── Dockerfile
+│   └── manage.py
+├── LICENSE
+├── Makefile
+└── README.md [~> This file]
 ```
 
 ## Installation
@@ -75,11 +45,19 @@ TZ=<Your timezone, mine is Asia/Yekaterinburg>
 Almost any x64 `Linux` OS will do.
 You will need `docker` and `docker-compose` with docker being able to start without `sudo`.
 
-Create the files above and then type into terminal:
+Edit and rename .env files in `secrets/` directory so that the names are:
+```text
+bot.env
+django.env
+nginx.env
+postgresql.env
+```
+and then type into terminal:
+
 ```bash
 make install
 ``` 
-Then lay back and relax.
+Press Enter, then lay back and relax.
 
 ## Contacts
 For any reasonable questions regarding the project,
