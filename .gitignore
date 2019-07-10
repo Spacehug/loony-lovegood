@@ -13,7 +13,7 @@ secrets/postgresql.env
 
 # Database data
 services/postgresql/dbdata/
-services/redis/redisdata
+services/redis/redisdata/
 
 # Session data
 *.session
