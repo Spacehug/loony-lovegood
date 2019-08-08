@@ -6,13 +6,13 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-"django[argon2]" = "*"
-django-request-logging = "*"
-django-admin-rangefilter = "*"
-djangorestframework = "*"
-django-rest-auth = "*"
-psycopg2-binary = "*"
-drf-yasg = {extras = ["validation"],version = "*"}
+"django[argon2]" = "==2.2.4"
+django-request-logging = "==0.7.0"
+django-admin-rangefilter = "==0.5.0"
+djangorestframework = "==3.9.3"
+django-rest-auth = "==0.9.5"
+psycopg2-binary = "==2.8.3"
+drf-yasg = {extras = ["validation"],version = "==1.16.1"}
 
 [requires]
 python_version = "3.7"
