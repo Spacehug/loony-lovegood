@@ -9,7 +9,7 @@ verify_ssl = true
 "django[argon2]" = "==2.2.4"
 django-request-logging = "==0.7.0"
 django-admin-rangefilter = "==0.5.0"
-djangorestframework = "==3.9.3"
+djangorestframework = "==3.11.2"
 django-rest-auth = "==0.9.5"
 psycopg2-binary = "==2.8.3"
 drf-yasg = {extras = ["validation"],version = "==1.16.1"}
